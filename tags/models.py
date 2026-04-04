@@ -14,7 +14,9 @@ class TaggedItemManager(models.Manager):
 
 class Tag(models.Model):
     name = models.CharField(max_length=255)
-
+    def __self__(self) ->str:
+        return self.name
+        
 class TaggedItem(models.Model):
     object = TaggedItemManager()
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
