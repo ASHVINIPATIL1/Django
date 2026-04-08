@@ -1,20 +1,47 @@
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Product
-from .serializers import ProductSerializer
+from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
+from .models import Product, Collection, OrderItem
+from django.db.models import Count
+from .serializers import ProductSerializer, CollectionSerializer
 # Create your views here.
 
-@api_view()
-def product_list(request):
-    queryset = Product.objects.select_related('collection').all()
-    serializer = ProductSerializer(queryset, many=True)
-    return Response(serializer.data)
 
-@api_view()
-def product_detail(request, id):
-    product = get_object_or_404(Product, pk=id)
-    serializer = ProductSerializer(product)
-    return Response(serializer.data)
+class ProductViewSet(ModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+    def destroy(self, request, *args, **kwargs):
+        if OrderItem.objects.filter(product_id=kwargs['pk']).count() > 0:
+            return Response(
+                {'error': 'Product cannot be deleted because it is associated with an order item.'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
+        return super().destroy(request, *args, **kwargs)
+    
+    
+class CollectionViewSet(ModelViewSet):
+    queryset = Collection.objects.annotate(products_count=Count('products')).all()
+    serializer_class = CollectionSerializer
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+    
+    def destroy(self, request, *args, **kwargs):
+        collection = self.get_object()
+
+        if collection.products.count() > 0:
+            return Response(
+                {'error': 'Collection cannot be deleted because it includes one or more products.'}, 
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
+        return super().destroy(request, *args, **kwargs)
+
